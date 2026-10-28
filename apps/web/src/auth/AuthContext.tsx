@@ -11,6 +11,26 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+function identifyPendoVisitor(profile: Profile): void {
+  pendo.identify({
+    visitor: {
+      id: profile.id,
+      email: profile.email,
+      full_name: profile.name,
+      role: profile.role,
+      organizationId: profile.organization.id,
+      active: profile.active,
+      createdAt: profile.createdAt,
+    },
+    account: {
+      id: profile.organization.id,
+      name: profile.organization.name,
+      plan: profile.organization.plan,
+      seats: profile.organization.seats,
+    },
+  });
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(() => tokenStore.get() !== null);
@@ -24,6 +44,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  // Covers sign-in, session hydration from the stored token and profile edits.
+  useEffect(() => {
+    if (user) identifyPendoVisitor(user);
+  }, [user]);
+
   const signIn = async (email: string, password: string) => {
     const { token, user: profile } = await api.login(email, password);
     tokenStore.set(token);
@@ -36,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       tokenStore.clear();
       setUser(null);
+      pendo.clearSession();
     }
   };
 

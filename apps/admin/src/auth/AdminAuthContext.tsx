@@ -10,6 +10,26 @@ interface AdminAuthState {
 
 const AdminAuthContext = createContext<AdminAuthState | null>(null);
 
+function identifyPendoVisitor(profile: AdminProfile): void {
+  pendo.identify({
+    visitor: {
+      id: profile.id,
+      email: profile.email,
+      full_name: profile.name,
+      role: profile.role,
+      organizationId: profile.organization.id,
+      active: profile.active,
+      createdAt: profile.createdAt,
+    },
+    account: {
+      id: profile.organization.id,
+      name: profile.organization.name,
+      plan: profile.organization.plan,
+      seats: profile.organization.seats,
+    },
+  });
+}
+
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [admin, setAdmin] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(() => tokenStore.get() !== null);
@@ -25,6 +45,11 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       .catch(() => tokenStore.clear())
       .finally(() => setLoading(false));
   }, []);
+
+  // Covers sign-in and session hydration from the stored token.
+  useEffect(() => {
+    if (admin) identifyPendoVisitor(admin);
+  }, [admin]);
 
   const signIn = async (email: string, password: string) => {
     const { token, user } = await adminApi.login(email, password);
@@ -44,6 +69,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     } finally {
       tokenStore.clear();
       setAdmin(null);
+      pendo.clearSession();
     }
   };
 
