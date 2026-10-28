@@ -1,6 +1,7 @@
 import { Button, ErrorMessage, TextAreaField } from "@fieldnotes/ui";
 import { useState, type FormEvent } from "react";
-import { api, type ChatMessage } from "../api/client";
+import { trackAssistantResponseReceived } from "../analytics/assistantEvents";
+import { ApiError, api, type ChatMessage } from "../api/client";
 
 export function AssistantPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -17,11 +18,30 @@ export function AssistantPanel() {
     setDraft("");
     setSending(true);
     setError(null);
+    const startedAt = performance.now();
+    const conversationTurn = next.filter((message) => message.role === "user").length;
     try {
-      const { reply } = await api.askAssistant(next);
+      const { reply, model } = await api.askAssistant(next);
       setMessages([...next, { role: "assistant", content: reply }]);
+      trackAssistantResponseReceived({
+        outcome: "success",
+        model: model ?? "not_configured",
+        messageCount: next.length + 1,
+        conversationTurn,
+        replyLength: reply.length,
+        latencyMs: Math.round(performance.now() - startedAt),
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "The assistant could not answer");
+      const message = err instanceof Error ? err.message : "The assistant could not answer";
+      setError(message);
+      trackAssistantResponseReceived({
+        outcome: "failure",
+        messageCount: next.length,
+        conversationTurn,
+        errorMessage: message.slice(0, 100),
+        statusCode: err instanceof ApiError ? err.status : undefined,
+        latencyMs: Math.round(performance.now() - startedAt),
+      });
     } finally {
       setSending(false);
     }

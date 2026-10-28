@@ -1,6 +1,8 @@
 import { Button, Card, ErrorMessage, SelectField, TextField } from "@fieldnotes/ui";
 import { useEffect, useState, type FormEvent } from "react";
+import { trackAdminEvent } from "../analytics/track";
 import { adminApi, type Billing, type Plan } from "../api/client";
+import { useAdminAuth } from "../auth/AdminAuthContext";
 
 const PLAN_OPTIONS = [
   { value: "free", label: "Free" },
@@ -9,14 +11,20 @@ const PLAN_OPTIONS = [
 ];
 
 export function BillingPage() {
+  const { admin } = useAdminAuth();
   const [billing, setBilling] = useState<Billing | null>(null);
+  // Last billing state confirmed by the server, used as the "previous" values.
+  const [savedBilling, setSavedBilling] = useState<Billing | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     adminApi
       .getBilling()
-      .then(setBilling)
+      .then((loaded) => {
+        setBilling(loaded);
+        setSavedBilling(loaded);
+      })
       .catch((err: Error) => setError(err.message));
   }, []);
 
@@ -26,9 +34,21 @@ export function BillingPage() {
     event.preventDefault();
     setSaved(false);
     setError(null);
+    const previous = savedBilling ?? billing;
     try {
-      setBilling(await adminApi.updateBilling(billing));
+      const updated = await adminApi.updateBilling(billing);
+      setBilling(updated);
+      setSavedBilling(updated);
       setSaved(true);
+      // Conversion milestone: fires only after the server accepted the change.
+      trackAdminEvent("subscription_updated", {
+        plan: updated.plan,
+        previousPlan: previous.plan,
+        seats: updated.seats,
+        previousSeats: previous.seats,
+        planChanged: updated.plan !== previous.plan,
+        organizationId: admin?.organization.id,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save billing details");
     }
