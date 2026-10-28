@@ -17,11 +17,28 @@ export function AssistantPanel() {
     setDraft("");
     setSending(true);
     setError(null);
+    const conversationTurnCount = next.filter((message) => message.role === "user").length;
     try {
-      const { reply } = await api.askAssistant(next);
+      const { reply, model } = await api.askAssistant(next);
       setMessages([...next, { role: "assistant", content: reply }]);
+      // Assistant request finished with a reply (model is null when the assistant is not configured).
+      window.pendo?.track("assistant_response_received", {
+        success: true,
+        model: model ?? "not_configured",
+        conversationTurnCount,
+        promptLength: content.length,
+        replyLength: reply.length,
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "The assistant could not answer");
+      const message = err instanceof Error ? err.message : "The assistant could not answer";
+      setError(message);
+      // Assistant request finished without a reply (e.g. 502 when the model is unavailable).
+      window.pendo?.track("assistant_response_received", {
+        success: false,
+        conversationTurnCount,
+        promptLength: content.length,
+        errorMessage: message.substring(0, 100),
+      });
     } finally {
       setSending(false);
     }
