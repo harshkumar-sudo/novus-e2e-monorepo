@@ -8,6 +8,10 @@ import { AuthProvider } from "./auth/AuthContext";
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root element");
 
+// Boot Novus (Pendo) once with an anonymous visitor; the signed-in user is
+// identified from the auth context.
+pendo.initialize({ visitor: { id: "" } });
+
 createRoot(root).render(
   <StrictMode>
     <BrowserRouter>
