@@ -1,5 +1,6 @@
 import { Badge, Button, Card, DataTable, ErrorMessage, type Column } from "@fieldnotes/ui";
 import { useEffect, useState } from "react";
+import { trackEvent } from "../analytics/pendo";
 import { adminApi, type Member, type Role } from "../api/client";
 import { useAdminAuth } from "../auth/AdminAuthContext";
 
@@ -19,6 +20,16 @@ export function UsersPage() {
     setError(null);
     try {
       const updated = await adminApi.updateMember(member.id, changes);
+      // The server saved the role or account status change (rejections land in catch).
+      let changeType = "role_changed";
+      if (changes.role === undefined) changeType = updated.active ? "reactivated" : "deactivated";
+      trackEvent("member_access_updated", {
+        changeType,
+        previousRole: member.role,
+        role: updated.role,
+        active: updated.active,
+        organizationId: admin?.organization.id,
+      });
       setMembers(members.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update the user");
