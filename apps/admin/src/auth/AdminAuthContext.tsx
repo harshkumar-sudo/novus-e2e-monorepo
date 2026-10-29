@@ -26,6 +26,27 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (!admin) return;
+    pendo.identify({
+      visitor: {
+        id: admin.id,
+        email: admin.email,
+        full_name: admin.name,
+        role: admin.role,
+        organizationId: admin.organizationId,
+        active: admin.active,
+        createdAt: admin.createdAt,
+      },
+      account: {
+        id: admin.organization.id,
+        name: admin.organization.name,
+        plan: admin.organization.plan,
+        seats: admin.organization.seats,
+      },
+    });
+  }, [admin]);
+
   const signIn = async (email: string, password: string) => {
     const { token, user } = await adminApi.login(email, password);
     if (user.role !== "admin") {
@@ -43,6 +64,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       await adminApi.logout();
     } finally {
       tokenStore.clear();
+      pendo.clearSession?.();
       setAdmin(null);
     }
   };
