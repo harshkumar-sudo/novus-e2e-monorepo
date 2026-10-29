@@ -8,7 +8,10 @@ export interface AdminProfile {
   email: string;
   name: string;
   role: Role;
-  organization: { id: string; name: string; plan: Plan };
+  organizationId: string;
+  active: boolean;
+  createdAt: string;
+  organization: { id: string; name: string; plan: Plan; seats: number };
 }
 
 export interface Member {
