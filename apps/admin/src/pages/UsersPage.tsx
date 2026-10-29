@@ -1,5 +1,6 @@
 import { Badge, Button, Card, DataTable, ErrorMessage, type Column } from "@fieldnotes/ui";
 import { useEffect, useState } from "react";
+import { trackAdminEvent } from "../analytics/track";
 import { adminApi, type Member, type Role } from "../api/client";
 import { useAdminAuth } from "../auth/AdminAuthContext";
 
@@ -19,6 +20,20 @@ export function UsersPage() {
     setError(null);
     try {
       const updated = await adminApi.updateMember(member.id, changes);
+      // Fires only after the server accepted the role or status change.
+      trackAdminEvent("member_access_updated", {
+        memberId: updated.id,
+        changeType:
+          changes.role !== undefined
+            ? "role_changed"
+            : updated.active
+              ? "reactivated"
+              : "deactivated",
+        newRole: updated.role,
+        previousRole: member.role,
+        active: updated.active,
+        organizationId: admin?.organization.id,
+      });
       setMembers(members.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update the user");

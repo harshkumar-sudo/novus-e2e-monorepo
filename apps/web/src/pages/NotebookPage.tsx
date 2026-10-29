@@ -112,6 +112,13 @@ export function NotebookPage() {
   const remove = async () => {
     if (!window.confirm(`Delete "${notebook.title}"? This cannot be undone.`)) return;
     await api.deleteNotebook(notebook.id);
+    // Fires only after the user confirmed and the API deleted the notebook.
+    trackNotebookObjectEvent("notebook_deleted", {
+      notebookId: notebook.id,
+      organizationId: user?.organization.id,
+      noteCount: notebook.notes.length,
+      notebookShared: notebook.shared,
+    });
     navigate("/");
   };
 

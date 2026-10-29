@@ -1,4 +1,5 @@
 import { Router, type Response } from "express";
+import { trackServerEvent, type TrackPropertyValue } from "../analytics/pendoTrack.js";
 import { requireAuth, type AuthedLocals } from "../auth.js";
 import { notebooks } from "../store.js";
 
@@ -51,7 +52,18 @@ assistantRouter.post("/", async (req, res: Response<unknown, AuthedLocals>) => {
     return;
   }
 
-  const context = notebookContext(res.locals.organization.id);
+  const { user, organization } = res.locals;
+  const context = notebookContext(organization.id);
+  // Fires once the assistant has answered (or failed to answer) this prompt.
+  const trackResponse = (properties: Record<string, TrackPropertyValue>) =>
+    trackServerEvent("assistant_response_received", user.id, organization.id, {
+      messageCount: messages.length,
+      organizationId: organization.id,
+      notebookCount: [...notebooks.values()].filter(
+        (notebook) => notebook.organizationId === organization.id
+      ).length,
+      ...properties,
+    });
   const system =
     "You are the Fieldnotes research assistant. Answer questions about the researcher's " +
     `field notes, and suggest what to observe next.\n\n${context}`;
@@ -59,6 +71,7 @@ assistantRouter.post("/", async (req, res: Response<unknown, AuthedLocals>) => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     const notebookCount = context.split("Notebook ").length - 1;
+    trackResponse({ outcome: "not_configured", model: "none" });
     res.json({
       reply: `The assistant is not configured (set OPENAI_API_KEY). You have ${notebookCount} notebook(s).`,
       model: null,
@@ -68,9 +81,15 @@ assistantRouter.post("/", async (req, res: Response<unknown, AuthedLocals>) => {
 
   try {
     const reply = await askOpenAi(apiKey, system, messages);
+    trackResponse({ outcome: "success", model: MODEL });
     res.json({ reply, model: MODEL });
   } catch (error) {
     console.error("Assistant request failed", error);
+    trackResponse({
+      outcome: "error",
+      model: MODEL,
+      errorMessage: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+    });
     res.status(502).json({ error: "The assistant is unavailable right now" });
   }
 });
