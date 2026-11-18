@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { requireAdmin, requireAuth, type AuthedLocals } from "../auth.js";
+import { trackServerEvent } from "../analytics/pendoTrack.js";
 import { users, type Plan, type Role } from "../store.js";
 
 export const adminRouter = Router();
@@ -78,8 +79,20 @@ adminRouter.put("/billing", (req, res: Res) => {
     return;
   }
   const organization = res.locals.organization;
+  const previousPlan = organization.plan;
+  const previousSeats = organization.seats;
   organization.plan = plan;
   organization.billingEmail = billingEmail;
   organization.seats = seats;
+  // Conversion milestone: the plan or seat count changed and was saved (billingEmail is PII).
+  if (plan !== previousPlan || seats !== previousSeats) {
+    trackServerEvent("subscription_updated", res.locals.user.id, organization.id, {
+      plan,
+      previousPlan,
+      seats,
+      previousSeats,
+      organizationId: organization.id,
+    });
+  }
   res.json({ plan, billingEmail, seats });
 });
