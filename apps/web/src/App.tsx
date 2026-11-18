@@ -1,12 +1,19 @@
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { AssistantPanel } from "./components/AssistantPanel";
 import { NavBar } from "./components/NavBar";
-import { LoginPage } from "./pages/LoginPage";
-import { NotebookPage } from "./pages/NotebookPage";
-import { NotebooksPage } from "./pages/NotebooksPage";
-import { SettingsPage } from "./pages/SettingsPage";
+
+const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const NotebookPage = lazy(() =>
+  import("./pages/NotebookPage").then((m) => ({ default: m.NotebookPage }))
+);
+const NotebooksPage = lazy(() =>
+  import("./pages/NotebooksPage").then((m) => ({ default: m.NotebooksPage }))
+);
+const SettingsPage = lazy(() =>
+  import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage }))
+);
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -17,7 +24,9 @@ function RequireAuth({ children }: { children: ReactNode }) {
     <>
       <NavBar />
       <div className="fn-layout">
-        <main className="fn-main">{children}</main>
+        <main className="fn-main">
+          <Suspense fallback={<p>Loading…</p>}>{children}</Suspense>
+        </main>
         <AssistantPanel />
       </div>
     </>
@@ -26,7 +35,8 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 export function App() {
   return (
-    <Routes>
+    <Suspense fallback={<p className="fn-main">Loading…</p>}>
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/"
@@ -54,5 +64,6 @@ export function App() {
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 }

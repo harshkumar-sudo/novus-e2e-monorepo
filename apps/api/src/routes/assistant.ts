@@ -18,6 +18,9 @@ function isChatMessage(value: unknown): value is ChatMessage {
   return (role === "user" || role === "assistant") && typeof content === "string";
 }
 
+const OPENAI_TIMEOUT_MS = 20_000;
+const MAX_CONTEXT_CHARS = 24_000;
+
 function notebookContext(organizationId: string): string {
   const lines = [...notebooks.values()]
     .filter((notebook) => notebook.organizationId === organizationId)
@@ -25,13 +28,16 @@ function notebookContext(organizationId: string): string {
       const notes = notebook.notes.map((note) => `  - ${note.body}`).join("\n");
       return `Notebook "${notebook.title}":\n${notes || "  (no notes)"}`;
     });
-  return lines.join("\n\n") || "The researcher has no notebooks yet.";
+  const context = lines.join("\n\n") || "The researcher has no notebooks yet.";
+  // Cap the prompt size so large organizations don't send oversized, slow requests.
+  return context.length > MAX_CONTEXT_CHARS ? context.slice(0, MAX_CONTEXT_CHARS) : context;
 }
 
 async function askOpenAi(apiKey: string, system: string, messages: ChatMessage[]): Promise<string> {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
     body: JSON.stringify({
       model: MODEL,
       messages: [{ role: "system", content: system }, ...messages],
